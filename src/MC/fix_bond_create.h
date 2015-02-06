@@ -69,6 +69,11 @@ class FixBondCreate : public Fix {
 
   tagint *copy;
 
+  bool random_pick;
+  int *candidate_n;
+  tagint **candidate_list;
+  double candidate_ran;
+
   class RanMars *random;
   class NeighList *list;
   

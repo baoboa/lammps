@@ -35,6 +35,7 @@ using namespace FixConst;
 
 #define BIG 1.0e20
 #define DELTA 16
+#define CMAX 12
 
 /* ---------------------------------------------------------------------- */
 
@@ -78,6 +79,7 @@ FixBondCreate::FixBondCreate(LAMMPS *lmp, int narg, char **arg) :
   fraction = 1.0;
   int seed = 12345;
   atype = dtype = itype = 0;
+  random_pick = false;
 
   int iarg = 8;
   while (iarg < narg) {
@@ -157,6 +159,10 @@ FixBondCreate::FixBondCreate(LAMMPS *lmp, int narg, char **arg) :
   partner = finalpartner = NULL;
   distsq = NULL;
 
+  candidate_n = NULL;
+  candidate_list = NULL;
+  random_pick = true;
+
   maxcreate = 0;
   created = NULL;
 
@@ -192,6 +198,8 @@ FixBondCreate::~FixBondCreate()
   memory->destroy(finalpartner);
   memory->destroy(distsq);
   memory->destroy(created);
+  memory->destroy(candidate_list);
+  memory->destroy(candidate_n);
   delete [] copy;
 }
 
@@ -319,6 +327,8 @@ void FixBondCreate::post_integrate()
 
   if (update->ntimestep % nevery) return;
 
+  printf("iteration of fbc\n");
+
   // check that all procs have needed ghost atoms within ghost cutoff
   // only if neighbor list has changed since last check
   // needs to be <= test b/c neighbor list could have been re-built in
@@ -346,10 +356,14 @@ void FixBondCreate::post_integrate()
     memory->destroy(partner);
     memory->destroy(finalpartner);
     memory->destroy(distsq);
+    memory->destroy(candidate_list);
+    memory->destroy(candidate_n);
     nmax = atom->nmax;
     memory->create(partner,nmax,"bond/create:partner");
     memory->create(finalpartner,nmax,"bond/create:finalpartner");
     memory->create(distsq,nmax,"bond/create:distsq");
+    memory->create(candidate_list,nmax,CMAX,"bond/create:candidate_list");
+    memory->create(candidate_n,nmax,"bond/create:candidate_n");
     probability = distsq;
   }
 
@@ -360,6 +374,10 @@ void FixBondCreate::post_integrate()
     partner[i] = 0;
     finalpartner[i] = 0;
     distsq[i] = BIG;
+    candidate_n[i] = 0;
+    for (j = 0; j < CMAX; j++) {
+      candidate_list[i][j]=0;
+    }
   }
 
   // loop over neighbors of my atoms
@@ -421,19 +439,28 @@ void FixBondCreate::post_integrate()
       rsq = delx*delx + dely*dely + delz*delz;
       if (rsq >= cutsq) continue;
 
-      if (rsq < distsq[i]) {
-        partner[i] = tag[j];
-        distsq[i] = rsq;
+      // add candidates for i and j
+      // only the particle of type itype will collect candidates
+      if (itype == iatomtype && jtype == jatomtype) {
+	if (candidate_n[i]<CMAX) {
+	  candidate_list[i][candidate_n[i]] = tag[j];
+	  candidate_n[i]++;
+	  printf("listing %i and %i -- cn %i\n", tag[i], tag[j], candidate_n[i]);
+	}
+      } else if (itype == jatomtype && jtype == iatomtype) {
+	if (candidate_n[j]<CMAX) {
+	  candidate_list[j][candidate_n[j]] = tag[i];
+	  candidate_n[j]++;
+	  printf("listing %i dna %i -- cn %i\n", tag[j], tag[i], candidate_n[j]);
+	}
       }
-      if (rsq < distsq[j]) {
-        partner[j] = tag[i];
-        distsq[j] = rsq;
-      }
+
     }
   }
 
   // reverse comm of distsq and partner
   // not needed if newton_pair off since I,J pair was seen by both procs
+  // for random pick: send lists of candidates
 
   commflag = 2;
   if (force->newton_pair) comm->reverse_comm_fix(this);
@@ -442,9 +469,16 @@ void FixBondCreate::post_integrate()
   // for prob check, generate random value for each atom with a bond partner
   // forward comm of partner and random value, so ghosts have it
 
-  if (fraction < 1.0) {
-    for (i = 0; i < nlocal; i++)
-      if (partner[i]) probability[i] = random->uniform();
+  for (i = 0; i < nlocal; i++) {
+    int c_n = candidate_n[i];
+    if (c_n==0) continue;
+    candidate_ran = random->uniform();
+    for (j = 0; j < c_n; j++) 
+      if (candidate_ran < ((double) (j+1)) / (double)c_n ) {
+	partner[i] = candidate_list[i][j];
+	printf("partnering %i %i\n", tag[i], partner[i]);
+	break;
+      }
   }
 
   commflag = 2;
@@ -462,11 +496,12 @@ void FixBondCreate::post_integrate()
   for (i = 0; i < nlocal; i++) {
     if (partner[i] == 0) continue;
     j = atom->map(partner[i]);
-    if (partner[j] != tag[i]) continue;
+    if (!random_pick && partner[j] != tag[i]) continue;
 
     // apply probability constraint using RN for atom with smallest ID
+    // for random pick, partner is chosen
 
-    if (fraction < 1.0) {
+    if (!random_pick && fraction < 1.0) {
       if (tag[i] < tag[j]) {
         if (probability[i] >= fraction) continue;
       } else {
@@ -1230,7 +1265,6 @@ int FixBondCreate::pack_forward_comm(int n, int *list, double *buf,
     for (i = 0; i < n; i++) {
       j = list[i];
       buf[m++] = ubuf(partner[j]).d;
-      buf[m++] = probability[j];
     }
     return m;
   }
@@ -1255,6 +1289,7 @@ int FixBondCreate::pack_forward_comm(int n, int *list, double *buf,
 void FixBondCreate::unpack_forward_comm(int n, int first, double *buf)
 {
   int i,j,m,ns,last;
+  tagint buf_partner;
 
   m = 0;
   last = first + n;
@@ -1265,10 +1300,9 @@ void FixBondCreate::unpack_forward_comm(int n, int first, double *buf)
 
   } else if (commflag == 2) {
     for (i = first; i < last; i++) {
-      partner[i] = (tagint) ubuf(buf[m++]).i;
-      probability[i] = buf[m++];
+      buf_partner = (tagint) ubuf(buf[m++]).i;
+      if (buf_partner > 0) partner[i] = buf_partner;
     }
-
   } else {
     int **nspecial = atom->nspecial;
     tagint **special = atom->special;
@@ -1289,7 +1323,7 @@ void FixBondCreate::unpack_forward_comm(int n, int first, double *buf)
 
 int FixBondCreate::pack_reverse_comm(int n, int first, double *buf)
 {
-  int i,m,last;
+  int i,k,m,last;
 
   m = 0;
   last = first + n;
@@ -1301,8 +1335,10 @@ int FixBondCreate::pack_reverse_comm(int n, int first, double *buf)
   }
 
   for (i = first; i < last; i++) {
-    buf[m++] = ubuf(partner[i]).d;
-    buf[m++] = distsq[i];
+    buf[m++] = ubuf(candidate_n[i]).d;
+    for (k = 0; k<candidate_n[i]; k++) {
+      buf[m++] = ubuf(candidate_list[i][k]).d;
+    }
   }
   return m;
 }
@@ -1324,10 +1360,11 @@ void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
   } else {
     for (i = 0; i < n; i++) {
       j = list[i];
-      if (buf[m+1] < distsq[j]) {
-        partner[j] = (tagint) ubuf(buf[m++]).i;
-        distsq[j] = buf[m++];
-      } else m += 2;
+      if (candidate_n[j] < CMAX) {
+	candidate_list[j][candidate_n[j]++] = (tagint) ubuf(buf[m++]).i;
+      } else {
+	error->warning(FLERR,"CMAX passed in unpack");
+      }
     }
   }
 }
