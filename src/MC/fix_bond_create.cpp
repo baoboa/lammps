@@ -398,6 +398,7 @@ void FixBondCreate::post_integrate()
   numneigh = list->numneigh;
   firstneigh = list->firstneigh;
 
+  printf("START\n");
   for (ii = 0; ii < inum; ii++) {
     i = ilist[ii];
     if (!(mask[i] & groupbit)) continue;
@@ -424,6 +425,7 @@ void FixBondCreate::post_integrate()
             (imaxbond == 0 || bondcount[j] < imaxbond))
           possible = 1;
       }
+      printf("%i %i %i %i %i %i\n", tag[i], itype, bondcount[i], tag[j], jtype, bondcount[j]);
       if (!possible) continue;
 
       // do not allow a duplicate bond to be created
@@ -457,6 +459,7 @@ void FixBondCreate::post_integrate()
 
     }
   }
+  printf("STOP\n");
 
   // reverse comm of distsq and partner
   // not needed if newton_pair off since I,J pair was seen by both procs
@@ -476,6 +479,7 @@ void FixBondCreate::post_integrate()
     for (j = 0; j < c_n; j++) 
       if (candidate_ran < ((double) (j+1)) / (double)c_n ) {
 	partner[i] = candidate_list[i][j];
+	partner[atom->map(candidate_list[i][j])] = tag[i];
 	printf("partnering %i %i\n", tag[i], partner[i]);
 	break;
       }
@@ -513,12 +517,13 @@ void FixBondCreate::post_integrate()
     // if not newton_bond, store bond with both I and J
     // atom J will also do this consistently, whatever proc it is on
 
-    if (!newton_bond || tag[i] < tag[j]) {
+    if (!newton_bond || tag[i] < tag[j] || true) {
       if (num_bond[i] == atom->bond_per_atom)
         error->one(FLERR,"New bond exceeded bonds per atom in fix bond/create");
       bond_type[i][num_bond[i]] = btype;
       bond_atom[i][num_bond[i]] = tag[j];
       num_bond[i]++;
+      printf("binding %i %i\n", tag[i], tag[j]);
     }
 
     // add a 1-2 neighbor to special bond list for atom I
@@ -551,9 +556,15 @@ void FixBondCreate::post_integrate()
 
     bondcount[i]++;
     if (type[i] == iatomtype) {
-      if (bondcount[i] == imaxbond) type[i] = inewtype;
+      if (bondcount[i] == imaxbond) {
+	type[i] = inewtype;
+	printf("Update type of i %i to %i\n", tag[i], inewtype);
+      }
     } else {
-      if (bondcount[i] == jmaxbond) type[i] = jnewtype;
+      if (bondcount[i] == jmaxbond) {
+	type[i] = jnewtype;
+	printf("Update type of j %i to %i\n", tag[i], jnewtype);
+      }
     }
 
     // store final created bond partners and count the created bond once
@@ -1347,7 +1358,7 @@ int FixBondCreate::pack_reverse_comm(int n, int first, double *buf)
 
 void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
 {
-  int i,j,m;
+  int i,j,k,m,ns;
 
   m = 0;
 
@@ -1360,11 +1371,13 @@ void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
   } else {
     for (i = 0; i < n; i++) {
       j = list[i];
-      if (candidate_n[j] < CMAX) {
-	candidate_list[j][candidate_n[j]++] = (tagint) ubuf(buf[m++]).i;
-      } else {
-	error->warning(FLERR,"CMAX passed in unpack");
-      }
+      ns = (int) ubuf(buf[m++]).i;
+      for (k = 0; k < ns; k++)
+	if (candidate_n[j] < CMAX) {
+	  candidate_list[j][candidate_n[j]++] = (tagint) ubuf(buf[m++]).i;
+	} else {
+	  error->warning(FLERR,"CMAX passed in unpack");
+	}
     }
   }
 }
