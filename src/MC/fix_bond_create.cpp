@@ -445,13 +445,13 @@ void FixBondCreate::post_integrate()
 	if (candidate_n[i]<CMAX) {
 	  candidate_list[i][candidate_n[i]] = tag[j];
 	  candidate_n[i]++;
-	  printf("listing %i and %i -- cn %i\n", tag[i], tag[j], candidate_n[i]);
+	  printf("listing %i and %i -- cn %i -- cpu %i\n", tag[i], tag[j], candidate_n[i], comm->me);
 	}
       } else if (itype == jatomtype && jtype == iatomtype) {
 	if (candidate_n[j]<CMAX) {
 	  candidate_list[j][candidate_n[j]] = tag[i];
 	  candidate_n[j]++;
-	  printf("listing %i dna %i -- cn %i\n", tag[j], tag[i], candidate_n[j]);
+	  printf("listing %i dna %i -- cn %i -- cpu %i\n", tag[j], tag[i], candidate_n[j], comm->me);
 	}
       }
 
@@ -476,14 +476,22 @@ void FixBondCreate::post_integrate()
     for (j = 0; j < c_n; j++) 
       if (candidate_ran < ((double) (j+1)) / (double)c_n ) {
 	partner[i] = candidate_list[i][j];
-	partner[atom->map(candidate_list[i][j])] = tag[i];
-	printf("partnering %i %i\n", tag[i], partner[i]);
+	k = atom->map(candidate_list[i][j]);
+	partner[k] = tag[i];
+	candidate_n[k] = -tag[i];
+	printf("partnering %i %i on cpu %i\n", tag[i], partner[i], comm->me);
 	break;
       }
   }
+  for (i = 0; i < nall; i++)
+    if (partner[i]) {
+      candidate_list[i][0] = -partner[i];
+    }
 
   commflag = 2;
-  comm->forward_comm_fix(this,2);
+  comm->forward_comm_fix(this);
+  commflag = 3;
+  comm->reverse_comm_fix(this, 1);
 
   // create bonds for atoms I own
   // only if both atoms list each other as winning bond partner
@@ -520,7 +528,7 @@ void FixBondCreate::post_integrate()
       bond_type[i][num_bond[i]] = btype;
       bond_atom[i][num_bond[i]] = tag[j];
       num_bond[i]++;
-      printf("binding %i %i\n", tag[i], tag[j]);
+      printf("binding %i %i on cpu %i\n", tag[i], tag[j], comm->me);
     }
 
     // add a 1-2 neighbor to special bond list for atom I
@@ -555,12 +563,12 @@ void FixBondCreate::post_integrate()
     if (type[i] == iatomtype) {
       if (bondcount[i] == imaxbond) {
 	type[i] = inewtype;
-	printf("Update type of i %i to %i\n", tag[i], inewtype);
+	printf("Update type of i %i to %i on cpu %i\n", tag[i], inewtype, comm->me);
       }
     } else {
       if (bondcount[i] == jmaxbond) {
 	type[i] = jnewtype;
-	printf("Update type of j %i to %i\n", tag[i], jnewtype);
+	printf("Update type of j %i to %i on cpu %i\n", tag[i], jnewtype, comm->me);
       }
     }
 
@@ -1342,6 +1350,12 @@ int FixBondCreate::pack_reverse_comm(int n, int first, double *buf)
     return m;
   }
 
+  if (commflag == 3) {
+    for (i = first; i < last; i++)
+      buf[m++] = ubuf(candidate_list[i][0]).d;
+    return m;
+  }
+
   for (i = first; i < last; i++) {
     buf[m++] = ubuf(candidate_n[i]).d;
     for (k = 0; k<candidate_n[i]; k++) {
@@ -1356,6 +1370,7 @@ int FixBondCreate::pack_reverse_comm(int n, int first, double *buf)
 void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
 {
   int i,j,k,m,ns;
+  tagint local_tag;
 
   m = 0;
 
@@ -1365,6 +1380,12 @@ void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
       bondcount[j] += (int) ubuf(buf[m++]).i;
     }
 
+  } else if (commflag == 3) {
+    for (i = 0; i < n; i++) {
+      j = list[i];
+      local_tag = (tagint) ubuf(buf[m++]).i;
+      if (local_tag < 0) partner[j]=-local_tag;
+    }
   } else {
     for (i = 0; i < n; i++) {
       j = list[i];
