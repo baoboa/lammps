@@ -327,8 +327,6 @@ void FixBondCreate::post_integrate()
 
   if (update->ntimestep % nevery) return;
 
-  printf("iteration of fbc\n");
-
   // check that all procs have needed ghost atoms within ghost cutoff
   // only if neighbor list has changed since last check
   // needs to be <= test b/c neighbor list could have been re-built in
@@ -398,7 +396,6 @@ void FixBondCreate::post_integrate()
   numneigh = list->numneigh;
   firstneigh = list->firstneigh;
 
-  printf("START\n");
   for (ii = 0; ii < inum; ii++) {
     i = ilist[ii];
     if (!(mask[i] & groupbit)) continue;
@@ -425,7 +422,6 @@ void FixBondCreate::post_integrate()
             (imaxbond == 0 || bondcount[j] < imaxbond))
           possible = 1;
       }
-      printf("%i %i %i %i %i %i\n", tag[i], itype, bondcount[i], tag[j], jtype, bondcount[j]);
       if (!possible) continue;
 
       // do not allow a duplicate bond to be created
@@ -440,6 +436,8 @@ void FixBondCreate::post_integrate()
       delz = ztmp - x[j][2];
       rsq = delx*delx + dely*dely + delz*delz;
       if (rsq >= cutsq) continue;
+
+      if (random->uniform() > fraction) continue;
 
       // add candidates for i and j
       // only the particle of type itype will collect candidates
@@ -459,7 +457,6 @@ void FixBondCreate::post_integrate()
 
     }
   }
-  printf("STOP\n");
 
   // reverse comm of distsq and partner
   // not needed if newton_pair off since I,J pair was seen by both procs
@@ -517,7 +514,7 @@ void FixBondCreate::post_integrate()
     // if not newton_bond, store bond with both I and J
     // atom J will also do this consistently, whatever proc it is on
 
-    if (!newton_bond || tag[i] < tag[j] || true) {
+    if (!newton_bond || tag[i] < tag[j]) {
       if (num_bond[i] == atom->bond_per_atom)
         error->one(FLERR,"New bond exceeded bonds per atom in fix bond/create");
       bond_type[i][num_bond[i]] = btype;
