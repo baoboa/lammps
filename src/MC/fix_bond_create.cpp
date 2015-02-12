@@ -487,8 +487,6 @@ void FixBondCreate::post_integrate()
       candidate_list[i][0] = -partner[i];
     }
 
-  commflag = 2;
-  comm->forward_comm_fix(this);
   commflag = 3;
   comm->reverse_comm_fix(this, 1);
 
