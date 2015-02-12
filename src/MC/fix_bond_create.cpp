@@ -478,7 +478,6 @@ void FixBondCreate::post_integrate()
 	partner[i] = candidate_list[i][j];
 	k = atom->map(candidate_list[i][j]);
 	partner[k] = tag[i];
-	candidate_n[k] = -tag[i];
 	printf("partnering %i %i on cpu %i\n", tag[i], partner[i], comm->me);
 	break;
       }
