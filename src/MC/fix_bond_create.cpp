@@ -1382,12 +1382,14 @@ void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
   if (commflag == 1) {
     for (i = 0; i < n; i++) {
       j = list[i];
+      j &= NEIGHMASK;
       bondcount[j] += (int) ubuf(buf[m++]).i;
     }
 
   } else if (commflag == 3) {
     for (i = 0; i < n; i++) {
       j = list[i];
+      j &= NEIGHMASK;
       local_tag = (tagint) ubuf(buf[m++]).i;
       if (local_tag < 0)
 	{
