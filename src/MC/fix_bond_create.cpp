@@ -478,7 +478,8 @@ void FixBondCreate::post_integrate()
 	partner[i] = candidate_list[i][j];
 	k = atom->map(candidate_list[i][j]);
 	partner[k] = tag[i];
-	printf("partnering %i %i on cpu %i\n", tag[i], partner[i], comm->me);
+	printf("partnering %i %i on cpu %i ", tag[i], partner[i], comm->me);
+	printf("-- tag[k] %i\n", tag[k]);
 	break;
       }
   }
@@ -488,7 +489,7 @@ void FixBondCreate::post_integrate()
     }
 
   commflag = 2;
-  comm->forward_comm_fix(this);
+  comm->forward_comm_fix(this, 1);
   commflag = 3;
   comm->reverse_comm_fix(this, 1);
 
@@ -505,6 +506,7 @@ void FixBondCreate::post_integrate()
     if (partner[i] == 0) continue;
     j = atom->map(partner[i]);
     if (!random_pick && partner[j] != tag[i]) continue;
+    printf("Seeing %i and %i on cpu %i\n", tag[i], tag[j], comm->me);
 
     // apply probability constraint using RN for atom with smallest ID
     // for random pick, partner is chosen
@@ -528,6 +530,8 @@ void FixBondCreate::post_integrate()
       bond_atom[i][num_bond[i]] = tag[j];
       num_bond[i]++;
       printf("binding %i %i on cpu %i\n", tag[i], tag[j], comm->me);
+    } else {
+      printf("NOT binding %i %i on cpu %i\n", tag[i], tag[j], comm->me);
     }
 
     // add a 1-2 neighbor to special bond list for atom I
@@ -1370,6 +1374,8 @@ void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
 {
   int i,j,k,m,ns;
   tagint local_tag;
+  tagint *tag = atom->tag;
+  int nlocal = atom->nlocal;
 
   m = 0;
 
@@ -1383,7 +1389,13 @@ void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
     for (i = 0; i < n; i++) {
       j = list[i];
       local_tag = (tagint) ubuf(buf[m++]).i;
-      if (local_tag < 0) partner[j]=-local_tag;
+      if (local_tag < 0)
+	{
+	  printf("Unpacking %i %i on cpu %i", tag[j], local_tag, comm->me);
+	  if (j<nlocal) printf(" j is local");
+	  printf("\n");
+	  partner[j]=-local_tag;
+	}
     }
   } else {
     for (i = 0; i < n; i++) {
