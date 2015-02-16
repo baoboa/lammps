@@ -475,7 +475,6 @@ void FixBondCreate::post_integrate()
     candidate_ran = random->uniform();
     for (j = 0; j < c_n; j++) 
       if (candidate_ran < ((double) (j+1)) / (double)c_n ) {
-	partner[i] = candidate_list[i][j];
 	k = atom->map(candidate_list[i][j]);
 	partner[k] = tag[i];
 	printf("partnering %i %i on cpu %i ", tag[i], partner[i], comm->me);
@@ -483,10 +482,38 @@ void FixBondCreate::post_integrate()
 	break;
       }
   }
+
+  for (i = 0; i < nall; i++) {
+    candidate_n[i] = 0;
+    for (j = 0; j < CMAX; j++) candidate_list[i][j] = 0;
+  }
+
   for (i = 0; i < nall; i++)
     if (partner[i]) {
-      candidate_list[i][0] = -partner[i];
+      candidate_list[i][candidate_n[i]++] = partner[i];
     }
+
+  commflag = 2;
+  comm->forward_comm_fix(this, 1);
+  commflag = 3;
+  comm->reverse_comm_fix(this, 1);
+
+  for (i = 0; i < nall; i++) partner[i] = 0;
+
+  for (i = 0; i < nlocal; i++) {
+    int c_n = candidate_n[i];
+    if (c_n==0) continue;
+    candidate_ran = random->uniform();
+    for (j = 0; j < c_n; j++)
+      if (candidate_ran < ((double) (j+1)) / (double)c_n ) {
+	partner[i] = candidate_list[i][j];
+	k = atom->map(candidate_list[i][j]);
+	partner[k] = tag[i];
+	printf("REpartnering %i %i on cpu %i ", tag[i], partner[i], comm->me);
+	printf("-- tag[k] %i\n", tag[k]);
+	break;
+      }
+  }
 
   commflag = 2;
   comm->forward_comm_fix(this, 1);
