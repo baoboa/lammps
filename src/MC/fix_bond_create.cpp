@@ -1393,10 +1393,8 @@ void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
       local_tag = (tagint) ubuf(buf[m++]).i;
       if (local_tag < 0)
 	{
-	  printf("Unpacking %i %i on cpu %i", tag[j], local_tag, comm->me);
-	  if (j<nlocal) printf(" j is local");
-	  printf("\n");
 	  partner[j]=-local_tag;
+	  candidate_list[j][0]=local_tag;
 	}
     }
   } else {
