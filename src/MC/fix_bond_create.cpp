@@ -479,7 +479,7 @@ void FixBondCreate::post_integrate()
       if (candidate_ran < ((double) (j+1)) / (double)c_n ) {
 	k = atom->map(candidate_list[i][j]);
 	partner[k] = tag[i];
-	printf("partnering %i %i on cpu %i ", tag[i], partner[i], comm->me);
+	printf("partnering %i %i on cpu %i ", tag[i], candidate_list[i][j], comm->me);
 	printf("-- tag[k] %i\n", tag[k]);
 	break;
       }
