@@ -37,6 +37,8 @@ using namespace FixConst;
 #define DELTA 16
 #define CMAX 12
 
+enum comm_choice {comm_bondcount, comm_partner, comm_candidate_list, comm_finalpartner, comm_candidate_0};
+
 /* ---------------------------------------------------------------------- */
 
 FixBondCreate::FixBondCreate(LAMMPS *lmp, int narg, char **arg) :
@@ -312,7 +314,7 @@ void FixBondCreate::setup(int vflag)
 
   // if newton_bond is set, need to sum bondcount
 
-  commflag = 1;
+  commflag = comm_bondcount;
   if (newton_bond) comm->reverse_comm_fix(this,1);
 }
 
@@ -343,7 +345,7 @@ void FixBondCreate::post_integrate()
 
   // forward comm of bondcount, so ghosts have it
 
-  commflag = 1;
+  commflag = comm_bondcount;
   comm->forward_comm_fix(this,1);
 
   // resize bond partner list and initialize it
@@ -462,7 +464,7 @@ void FixBondCreate::post_integrate()
   // not needed if newton_pair off since I,J pair was seen by both procs
   // for random pick: send lists of candidates
 
-  commflag = 2;
+  commflag = comm_candidate_list;
   if (force->newton_pair) comm->reverse_comm_fix(this);
 
   // each atom now knows its winning partner
@@ -493,10 +495,8 @@ void FixBondCreate::post_integrate()
       candidate_list[i][candidate_n[i]++] = partner[i];
     }
 
-  commflag = 2;
-  comm->forward_comm_fix(this, 1);
-  commflag = 3;
-  comm->reverse_comm_fix(this, 1);
+  commflag = comm_candidate_list;
+  comm->reverse_comm_fix(this);
 
   for (i = 0; i < nall; i++) partner[i] = 0;
 
@@ -515,9 +515,8 @@ void FixBondCreate::post_integrate()
       }
   }
 
-  commflag = 2;
+  commflag = comm_partner;
   comm->forward_comm_fix(this, 1);
-  commflag = 3;
   comm->reverse_comm_fix(this, 1);
 
   // create bonds for atoms I own
@@ -1299,7 +1298,7 @@ int FixBondCreate::pack_forward_comm(int n, int *list, double *buf,
 
   m = 0;
 
-  if (commflag == 1) {
+  if (commflag == comm_bondcount) {
     for (i = 0; i < n; i++) {
       j = list[i];
       buf[m++] = ubuf(bondcount[j]).d;
@@ -1307,10 +1306,20 @@ int FixBondCreate::pack_forward_comm(int n, int *list, double *buf,
     return m;
   }
 
-  if (commflag == 2) {
+  if (commflag == comm_partner) {
     for (i = 0; i < n; i++) {
       j = list[i];
       buf[m++] = ubuf(partner[j]).d;
+    }
+    return m;
+  }
+
+  if (commflag == comm_candidate_list) {
+    for (i = 0; i < n; i++) {
+      j = list[i];
+      buf[m++] = ubuf(candidate_n[j]).d;
+      for (k = 0; k < candidate_n[j]; k++)
+	buf[m++] = ubuf(candidate_list[j][k]).d;
     }
     return m;
   }
@@ -1340,14 +1349,26 @@ void FixBondCreate::unpack_forward_comm(int n, int first, double *buf)
   m = 0;
   last = first + n;
 
-  if (commflag == 1) {
+  if (commflag == comm_bondcount) {
     for (i = first; i < last; i++)
       bondcount[i] = (int) ubuf(buf[m++]).i;
 
-  } else if (commflag == 2) {
+  } else if (commflag == comm_partner) {
     for (i = first; i < last; i++) {
       buf_partner = (tagint) ubuf(buf[m++]).i;
       if (buf_partner > 0) partner[i] = buf_partner;
+    }
+  } else if (commflag == comm_candidate_list) {
+    for (i = first; i < last; i++) {
+      ns = (int) ubuf(buf[m++]).i;
+      for (j = 0; j < ns; j++) {
+	if (candidate_n[i] < CMAX) {
+	  candidate_list[i][candidate_n[i]] = (tagint) ubuf(buf[m++]).i;
+	  candidate_n[i]++;
+	} else {
+	  error->warning(FLERR,"CMAX passed in unpack_forward_comm");
+	}
+      }
     }
   } else {
     int **nspecial = atom->nspecial;
@@ -1374,24 +1395,30 @@ int FixBondCreate::pack_reverse_comm(int n, int first, double *buf)
   m = 0;
   last = first + n;
 
-  if (commflag == 1) {
-    for (i = first; i < last; i++)
-      buf[m++] = ubuf(bondcount[i]).d;
-    return m;
-  }
-
-  if (commflag == 3) {
-    for (i = first; i < last; i++)
-      buf[m++] = ubuf(candidate_list[i][0]).d;
-    return m;
-  }
-
-  for (i = first; i < last; i++) {
-    buf[m++] = ubuf(candidate_n[i]).d;
-    for (k = 0; k<candidate_n[i]; k++) {
-      buf[m++] = ubuf(candidate_list[i][k]).d;
+  if (commflag == comm_bondcount)
+    {
+      for (i = first; i < last; i++)
+	buf[m++] = ubuf(bondcount[i]).d;
     }
-  }
+  else if (commflag == comm_candidate_0)
+    {
+      for (i = first; i < last; i++)
+	buf[m++] = ubuf(candidate_list[i][0]).d;
+    }
+  else if (commflag == comm_partner)
+    {
+      for (i = first; i < last; i++)
+	buf[m++] = ubuf(partner[i]).d;
+    }
+  else if (commflag == comm_candidate_list)
+    {
+      for (i = first; i < last; i++) {
+	buf[m++] = ubuf(candidate_n[i]).d;
+	for (k = 0; k<candidate_n[i]; k++) {
+	  buf[m++] = ubuf(candidate_list[i][k]).d;
+	}
+      }
+    }
   return m;
 }
 
@@ -1406,14 +1433,14 @@ void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
 
   m = 0;
 
-  if (commflag == 1) {
+  if (commflag == comm_bondcount) {
     for (i = 0; i < n; i++) {
       j = list[i];
       j &= NEIGHMASK;
       bondcount[j] += (int) ubuf(buf[m++]).i;
     }
 
-  } else if (commflag == 3) {
+  } else if (commflag == comm_candidate_0) {
     for (i = 0; i < n; i++) {
       j = list[i];
       j &= NEIGHMASK;
@@ -1424,7 +1451,14 @@ void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
 	  candidate_list[j][0]=local_tag;
 	}
     }
-  } else {
+  } else if (commflag == comm_partner) {
+    for (i = 0; i < n; i++) {
+      j = list[i];
+      j &= NEIGHMASK;
+      local_tag = (tagint) ubuf(buf[m++]).i;
+      if (local_tag > 0) partner[j]=local_tag;
+    }
+  } else if (commflag == comm_candidate_list) {
     for (i = 0; i < n; i++) {
       j = list[i];
       ns = (int) ubuf(buf[m++]).i;
