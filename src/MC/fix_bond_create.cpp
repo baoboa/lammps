@@ -152,7 +152,7 @@ FixBondCreate::FixBondCreate(LAMMPS *lmp, int narg, char **arg) :
   // set comm sizes needed by this fix
   // forward is big due to comm of broken bonds and 1-2 neighbors
 
-  comm_forward = MAX(2,2+atom->maxspecial);
+  comm_forward = MAX(MAX(2,2+atom->maxspecial), 1+CMAX);
   comm_reverse = MAX(2, 1+CMAX);
 
   // allocate arrays local to this fix
