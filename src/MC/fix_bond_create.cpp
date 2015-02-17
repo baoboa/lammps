@@ -474,6 +474,9 @@ void FixBondCreate::post_integrate()
   for (i = 0; i < nlocal; i++) {
     int c_n = candidate_n[i];
     if (c_n==0) continue;
+    printf("ALLPartners to %i", tag[i]);
+    for (j = 0; j < c_n; j++) printf(" %i", candidate_list[i][j]);
+    printf("\n");
     candidate_ran = random->uniform();
     for (j = 0; j < c_n; j++) 
       if (candidate_ran < ((double) (j+1)) / (double)c_n ) {
