@@ -11,6 +11,20 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   Contributing author: Pierre de Buyl (KU Leuven) http://pdebuyl.be/
+
+   This fix is based on 'MC/fix_bond_create.{h,cpp}'. All the management code
+   (constructor, init, setup) and the code that updates the angles, dihedrals
+   and impropers is copied.
+
+   'post_integrate' is modified to follow the algorithm presented in
+   arXiv:1409.7498 (P. de Buyl and E. Nies). Instead of choosing the closest
+   partners, partners are chosen randomly (and with equal probability) among all
+   partners in the given cutoff.
+
+------------------------------------------------------------------------- */
+
 #include "math.h"
 #include "mpi.h"
 #include "string.h"
