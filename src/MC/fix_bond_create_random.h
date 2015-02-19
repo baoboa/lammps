@@ -13,21 +13,21 @@
 
 #ifdef FIX_CLASS
 
-FixStyle(bond/create,FixBondCreate)
+FixStyle(bond/create/random,FixBondCreateRandom)
 
 #else
 
-#ifndef LMP_FIX_BOND_CREATE_H
-#define LMP_FIX_BOND_CREATE_H
+#ifndef LMP_FIX_BOND_CREATE_RANDOM_H
+#define LMP_FIX_BOND_CREATE_RANDOM_H
 
 #include "fix.h"
 
 namespace LAMMPS_NS {
 
-class FixBondCreate : public Fix {
+class FixBondCreateRandom : public Fix {
  public:
-  FixBondCreate(class LAMMPS *, int, char **);
-  ~FixBondCreate();
+  FixBondCreateRandom(class LAMMPS *, int, char **);
+  ~FixBondCreateRandom();
   int setmask();
   void init();
   void init_list(int, class NeighList *);
