@@ -341,7 +341,36 @@ void FixBondCreateRandom::post_integrate()
   int *ilist,*jlist,*numneigh,**firstneigh;
   tagint *slist;
 
+  int *num_bond = atom->num_bond;
+  int **bond_type = atom->bond_type;
+  tagint **bond_atom = atom->bond_atom;
+  int nlocal = atom->nlocal;
+  int nghost = atom->nghost;
+  int nall = nlocal + nghost;
+  int newton_bond = force->newton_bond;
+
   if (update->ntimestep % nevery) return;
+
+  for (i = 0; i < nall; i++) bondcount[i] = 0;
+
+  for (i = 0; i < nlocal; i++)
+    for (j = 0; j < num_bond[i]; j++) {
+      if (bond_type[i][j] == btype) {
+        bondcount[i]++;
+        if (newton_bond) {
+          m = atom->map(bond_atom[i][j]);
+          if (m < 0)
+            error->one(FLERR,"Fix bond/create needs ghost atoms "
+                       "from further away");
+          bondcount[m]++;
+        }
+      }
+    }
+
+  // if newton_bond is set, need to sum bondcount
+
+  commflag = comm_bondcount;
+  if (newton_bond) comm->reverse_comm_fix(this,1);
 
   // check that all procs have needed ghost atoms within ghost cutoff
   // only if neighbor list has changed since last check
@@ -381,9 +410,6 @@ void FixBondCreateRandom::post_integrate()
     probability = distsq;
   }
 
-  int nlocal = atom->nlocal;
-  int nall = atom->nlocal + atom->nghost;
-
   for (i = 0; i < nall; i++) {
     partner[i] = 0;
     finalpartner[i] = 0;
@@ -399,8 +425,6 @@ void FixBondCreateRandom::post_integrate()
 
   double **x = atom->x;
   tagint *tag = atom->tag;
-  tagint **bond_atom = atom->bond_atom;
-  int *num_bond = atom->num_bond;
   int **nspecial = atom->nspecial;
   tagint **special = atom->special;
   int *mask = atom->mask;
@@ -540,9 +564,6 @@ void FixBondCreateRandom::post_integrate()
   // only if both atoms list each other as winning bond partner
   //   and probability constraint is satisfied
   // if other atom is owned by another proc, it should do same thing
-
-  int **bond_type = atom->bond_type;
-  int newton_bond = force->newton_bond;
 
   ncreate = 0;
   for (i = 0; i < nlocal; i++) {
