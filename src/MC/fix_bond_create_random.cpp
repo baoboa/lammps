@@ -289,47 +289,6 @@ void FixBondCreateRandom::init_list(int id, NeighList *ptr)
 
 void FixBondCreateRandom::setup(int vflag)
 {
-  int i,j,m;
-
-  // compute initial bondcount if this is first run
-  // can't do this earlier, in constructor or init, b/c need ghost info
-
-  if (countflag) return;
-  countflag = 1;
-
-  // count bonds stored with each bond I own
-  // if newton bond is not set, just increment count on atom I
-  // if newton bond is set, also increment count on atom J even if ghost
-  // bondcount is long enough to tally ghost atom counts
-
-  int *num_bond = atom->num_bond;
-  int **bond_type = atom->bond_type;
-  tagint **bond_atom = atom->bond_atom;
-  int nlocal = atom->nlocal;
-  int nghost = atom->nghost;
-  int nall = nlocal + nghost;
-  int newton_bond = force->newton_bond;
-
-  for (i = 0; i < nall; i++) bondcount[i] = 0;
-
-  for (i = 0; i < nlocal; i++)
-    for (j = 0; j < num_bond[i]; j++) {
-      if (bond_type[i][j] == btype) {
-        bondcount[i]++;
-        if (newton_bond) {
-          m = atom->map(bond_atom[i][j]);
-          if (m < 0) 
-            error->one(FLERR,"Fix bond/create/random needs ghost atoms "
-                       "from further away");
-          bondcount[m]++;
-        }
-      }
-    }
-
-  // if newton_bond is set, need to sum bondcount
-
-  commflag = comm_bondcount;
-  if (newton_bond) comm->reverse_comm_fix(this,1);
 }
 
 /* ---------------------------------------------------------------------- */
