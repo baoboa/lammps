@@ -37,6 +37,7 @@ using namespace FixConst;
 #define DELTA 16
 
 enum {comm_bondcount, comm_partner, comm_finalpartner};
+enum {method_nearest};
 
 /* ---------------------------------------------------------------------- */
 
@@ -70,6 +71,9 @@ FixBondCreate::FixBondCreate(LAMMPS *lmp, int narg, char **arg) :
     error->all(FLERR,"Invalid bond type in fix bond/create command");
 
   cutsq = cutoff*cutoff;
+
+  keep_bondcount = true;
+  method = method_nearest;
 
   // optional keywords
 
@@ -267,13 +271,18 @@ void FixBondCreate::init_list(int id, NeighList *ptr)
 
 void FixBondCreate::setup(int vflag)
 {
-  int i,j,m;
 
   // compute initial bondcount if this is first run
   // can't do this earlier, in constructor or init, b/c need ghost info
 
-  if (countflag) return;
-  countflag = 1;
+  if (keep_bondcount) compute_bondcount();
+}
+
+/* ---------------------------------------------------------------------- */
+
+void FixBondCreate::compute_bondcount()
+{
+  int i,j,m;
 
   // count bonds stored with each bond I own
   // if newton bond is not set, just increment count on atom I
@@ -320,6 +329,8 @@ void FixBondCreate::post_integrate()
   tagint *slist;
 
   if (update->ntimestep % nevery) return;
+
+  if (!keep_bondcount) compute_bondcount();
 
   // check that all procs have needed ghost atoms within ghost cutoff
   // only if neighbor list has changed since last check
@@ -423,14 +434,17 @@ void FixBondCreate::post_integrate()
       rsq = delx*delx + dely*dely + delz*delz;
       if (rsq >= cutsq) continue;
 
-      if (rsq < distsq[i]) {
-        partner[i] = tag[j];
-        distsq[i] = rsq;
-      }
-      if (rsq < distsq[j]) {
-        partner[j] = tag[i];
-        distsq[j] = rsq;
-      }
+      if (method == method_nearest) {
+	if (rsq < distsq[i]) {
+	  partner[i] = tag[j];
+	  distsq[i] = rsq;
+	}
+	if (rsq < distsq[j]) {
+	  partner[j] = tag[i];
+	  distsq[j] = rsq;
+	}
+      } else
+	error->all(FLERR,"Fix bond/create: unknown method");
     }
   }
 
