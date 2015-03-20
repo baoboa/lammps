@@ -386,6 +386,8 @@ void FixBondCreate::post_integrate()
   tagint **special = atom->special;
   int *mask = atom->mask;
   int *type = atom->type;
+  int **bond_type = atom->bond_type;
+  int newton_bond = force->newton_bond;
 
   neighbor->build_one(list,1);
   inum = list->inum;
@@ -448,41 +450,41 @@ void FixBondCreate::post_integrate()
     }
   }
 
-  // reverse comm of distsq and partner
-  // not needed if newton_pair off since I,J pair was seen by both procs
+  if (method == method_nearest) {
+    // reverse comm of distsq and partner
+    // not needed if newton_pair off since I,J pair was seen by both procs
 
-  commflag = comm_partner;
-  if (force->newton_pair) comm->reverse_comm_fix(this);
+    commflag = comm_partner;
+    if (force->newton_pair) comm->reverse_comm_fix(this);
 
-  // each atom now knows its winning partner
-  // for prob check, generate random value for each atom with a bond partner
-  // forward comm of partner and random value, so ghosts have it
+    // each atom now knows its winning partner
+    // for prob check, generate random value for each atom with a bond partner
+    // forward comm of partner and random value, so ghosts have it
 
-  if (fraction < 1.0) {
-    for (i = 0; i < nlocal; i++)
-      if (partner[i]) probability[i] = random->uniform();
-  }
+    if (fraction < 1.0) {
+      for (i = 0; i < nlocal; i++)
+	if (partner[i]) probability[i] = random->uniform();
+    }
 
-  commflag = comm_partner;
-  comm->forward_comm_fix(this,2);
+    commflag = comm_partner;
+    comm->forward_comm_fix(this,2);
+  } else
+    error->all(FLERR,"Fix bond/create: unknown method");
 
   // create bonds for atoms I own
   // only if both atoms list each other as winning bond partner
   //   and probability constraint is satisfied
   // if other atom is owned by another proc, it should do same thing
 
-  int **bond_type = atom->bond_type;
-  int newton_bond = force->newton_bond;
-
   ncreate = 0;
   for (i = 0; i < nlocal; i++) {
     if (partner[i] == 0) continue;
     j = atom->map(partner[i]);
-    if (partner[j] != tag[i]) continue;
+    if (method == method_nearest && partner[j] != tag[i]) continue;
 
     // apply probability constraint using RN for atom with smallest ID
 
-    if (fraction < 1.0) {
+    if (method == method_nearest && fraction < 1.0) {
       if (tag[i] < tag[j]) {
         if (probability[i] >= fraction) continue;
       } else {
