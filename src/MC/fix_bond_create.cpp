@@ -36,6 +36,8 @@ using namespace FixConst;
 #define BIG 1.0e20
 #define DELTA 16
 
+enum {comm_bondcount, comm_partner, comm_finalpartner};
+
 /* ---------------------------------------------------------------------- */
 
 FixBondCreate::FixBondCreate(LAMMPS *lmp, int narg, char **arg) :
@@ -304,7 +306,7 @@ void FixBondCreate::setup(int vflag)
 
   // if newton_bond is set, need to sum bondcount
 
-  commflag = 1;
+  commflag = comm_bondcount;
   if (newton_bond) comm->reverse_comm_fix(this,1);
 }
 
@@ -335,7 +337,7 @@ void FixBondCreate::post_integrate()
 
   // forward comm of bondcount, so ghosts have it
 
-  commflag = 1;
+  commflag = comm_bondcount;
   comm->forward_comm_fix(this,1);
 
   // resize bond partner list and initialize it
@@ -435,7 +437,7 @@ void FixBondCreate::post_integrate()
   // reverse comm of distsq and partner
   // not needed if newton_pair off since I,J pair was seen by both procs
 
-  commflag = 2;
+  commflag = comm_partner;
   if (force->newton_pair) comm->reverse_comm_fix(this);
 
   // each atom now knows its winning partner
@@ -447,7 +449,7 @@ void FixBondCreate::post_integrate()
       if (partner[i]) probability[i] = random->uniform();
   }
 
-  commflag = 2;
+  commflag = comm_partner;
   comm->forward_comm_fix(this,2);
 
   // create bonds for atoms I own
@@ -544,7 +546,7 @@ void FixBondCreate::post_integrate()
   // communicate final partner and 1-2 special neighbors
   // 1-2 neighs already reflect created bonds
 
-  commflag = 3;
+  commflag = comm_finalpartner;
   comm->forward_comm_fix(this);
 
   // create list of broken bonds that influence my owned atoms
@@ -1218,36 +1220,37 @@ int FixBondCreate::pack_forward_comm(int n, int *list, double *buf,
 
   m = 0;
 
-  if (commflag == 1) {
+  if (commflag == comm_bondcount) {
     for (i = 0; i < n; i++) {
       j = list[i];
       buf[m++] = ubuf(bondcount[j]).d;
     }
     return m;
-  }
-
-  if (commflag == 2) {
+  } else if (commflag == comm_partner) {
     for (i = 0; i < n; i++) {
       j = list[i];
       buf[m++] = ubuf(partner[j]).d;
       buf[m++] = probability[j];
     }
     return m;
-  }
+  } else if (commflag == comm_finalpartner) {
 
-  int **nspecial = atom->nspecial;
-  tagint **special = atom->special;
+    int **nspecial = atom->nspecial;
+    tagint **special = atom->special;
 
-  m = 0;
-  for (i = 0; i < n; i++) {
-    j = list[i];
-    buf[m++] = ubuf(finalpartner[j]).d;
-    ns = nspecial[j][0];
-    buf[m++] = ubuf(ns).d;
-    for (k = 0; k < ns; k++)
-      buf[m++] = ubuf(special[j][k]).d;
-  }
-  return m;
+    m = 0;
+    for (i = 0; i < n; i++) {
+      j = list[i];
+      buf[m++] = ubuf(finalpartner[j]).d;
+      ns = nspecial[j][0];
+      buf[m++] = ubuf(ns).d;
+      for (k = 0; k < ns; k++)
+	buf[m++] = ubuf(special[j][k]).d;
+    }
+    return m;
+  } else
+    error->all(FLERR,"Fix bond/create: unknown commflag");
+
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1259,17 +1262,17 @@ void FixBondCreate::unpack_forward_comm(int n, int first, double *buf)
   m = 0;
   last = first + n;
 
-  if (commflag == 1) {
+  if (commflag == comm_bondcount) {
     for (i = first; i < last; i++)
       bondcount[i] = (int) ubuf(buf[m++]).i;
 
-  } else if (commflag == 2) {
+  } else if (commflag == comm_partner) {
     for (i = first; i < last; i++) {
       partner[i] = (tagint) ubuf(buf[m++]).i;
       probability[i] = buf[m++];
     }
 
-  } else {
+  } else if (commflag == comm_finalpartner) {
     int **nspecial = atom->nspecial;
     tagint **special = atom->special;
 
@@ -1282,7 +1285,9 @@ void FixBondCreate::unpack_forward_comm(int n, int first, double *buf)
       for (j = 0; j < ns; j++)
         special[i][j] = (tagint) ubuf(buf[m++]).i;
     }
-  }
+  } else
+    error->all(FLERR,"Fix bond/create: unknown commflag");
+
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1294,17 +1299,18 @@ int FixBondCreate::pack_reverse_comm(int n, int first, double *buf)
   m = 0;
   last = first + n;
 
-  if (commflag == 1) {
+  if (commflag == comm_bondcount) {
     for (i = first; i < last; i++)
       buf[m++] = ubuf(bondcount[i]).d;
     return m;
-  }
-
-  for (i = first; i < last; i++) {
-    buf[m++] = ubuf(partner[i]).d;
-    buf[m++] = distsq[i];
-  }
-  return m;
+  } else if (commflag == comm_partner) {
+    for (i = first; i < last; i++) {
+      buf[m++] = ubuf(partner[i]).d;
+      buf[m++] = distsq[i];
+    }
+    return m;
+  } else
+    error->all(FLERR,"Fix bond/create: unknown commflag");
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1315,13 +1321,12 @@ void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
 
   m = 0;
 
-  if (commflag == 1) {
+  if (commflag == comm_bondcount) {
     for (i = 0; i < n; i++) {
       j = list[i];
       bondcount[j] += (int) ubuf(buf[m++]).i;
     }
-
-  } else {
+  } else if (commflag == comm_partner) {
     for (i = 0; i < n; i++) {
       j = list[i];
       if (buf[m+1] < distsq[j]) {
@@ -1329,7 +1334,8 @@ void FixBondCreate::unpack_reverse_comm(int n, int *list, double *buf)
         distsq[j] = buf[m++];
       } else m += 2;
     }
-  }
+  } else
+    error->all(FLERR,"Fix bond/create: unknown commflag");
 }
 
 /* ----------------------------------------------------------------------
