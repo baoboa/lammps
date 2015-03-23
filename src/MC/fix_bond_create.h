@@ -73,6 +73,9 @@ class FixBondCreate : public Fix {
 
   tagint *copy;
 
+  int *candidate_n;
+  tagint **candidate_list;
+
   class RanMars *random;
   class NeighList *list;
   
