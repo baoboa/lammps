@@ -1352,21 +1352,18 @@ int FixBondCreate::pack_forward_comm(int n, int *list, double *buf,
       j = list[i];
       buf[m++] = ubuf(bondcount[j]).d;
     }
-    return m;
   } else if (commflag == comm_partner) {
     for (i = 0; i < n; i++) {
       j = list[i];
       buf[m++] = ubuf(partner[j]).d;
       buf[m++] = probability[j];
     }
-    return m;
   }
   else if (commflag == comm_partner_random) {
     for (i = 0; i < n; i++) {
       j = list[i];
       buf[m++] = ubuf(partner[j]).d;
     }
-    return m;
   } else if (commflag == comm_finalpartner) {
 
     int **nspecial = atom->nspecial;
@@ -1381,7 +1378,6 @@ int FixBondCreate::pack_forward_comm(int n, int *list, double *buf,
       for (k = 0; k < ns; k++)
 	buf[m++] = ubuf(special[j][k]).d;
     }
-    return m;
   } else if (commflag == comm_candidate_list) {
     for (i = 0; i < n; i++) {
       j = list[i];
@@ -1389,9 +1385,10 @@ int FixBondCreate::pack_forward_comm(int n, int *list, double *buf,
       for (k = 0; k < candidate_n[j]; k++)
 	buf[m++] = ubuf(candidate_list[j][k]).d;
     }
-    return m;
   } else
     error->all(FLERR,"Fix bond/create: unknown commflag");
+
+  return m;
 
 }
 
@@ -1461,17 +1458,14 @@ int FixBondCreate::pack_reverse_comm(int n, int first, double *buf)
   if (commflag == comm_bondcount) {
     for (i = first; i < last; i++)
       buf[m++] = ubuf(bondcount[i]).d;
-    return m;
   } else if (commflag == comm_partner) {
     for (i = first; i < last; i++) {
       buf[m++] = ubuf(partner[i]).d;
       buf[m++] = distsq[i];
     }
-    return m;
   } else if (commflag == comm_partner_random) {
     for (i = first; i < last; i++)
       buf[m++] = ubuf(partner[i]).d;
-    return m;
   } else if (commflag == comm_candidate_list) {
     for (i = first; i < last; i++) {
       buf[m++] = ubuf(candidate_n[i]).d;
@@ -1479,10 +1473,12 @@ int FixBondCreate::pack_reverse_comm(int n, int first, double *buf)
 	buf[m++] = ubuf(candidate_list[i][k]).d;
       }
     }
-    return m;
   }
   else
     error->all(FLERR,"Fix bond/create: unknown commflag");
+
+  return m;
+
 }
 
 /* ---------------------------------------------------------------------- */
