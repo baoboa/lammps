@@ -11,6 +11,21 @@
    See the README file in the top-level LAMMPS directory.
 ------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------
+   Contributing author: Pierre de Buyl (KU Leuven) http://pdebuyl.be/
+
+   The main contribution is the addition of an alternative selection
+   algorithm for partners in a bond/create reaction, via a
+   modification of 'post_integrate' and additional communication
+   choices.
+
+   The selection method 'random' is presented in arXiv:1409.7498
+   (P. de Buyl and E. Nies, see full journal ref). Instead of choosing
+   the closest partners, partners are chosen randomly (and with equal
+   probability) among all partners in the given cutoff.
+
+------------------------------------------------------------------------- */
+
 #include "math.h"
 #include "mpi.h"
 #include "string.h"
