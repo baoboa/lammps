@@ -299,7 +299,6 @@ void FixBondCreate::init()
   neighbor->requests[irequest]->fix = 1;
   neighbor->requests[irequest]->occasional = 1;
 
-  lastcheck = -1;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -373,15 +372,6 @@ void FixBondCreate::post_integrate()
   if (update->ntimestep % nevery) return;
 
   if (!keep_bondcount) compute_bondcount();
-
-  // check that all procs have needed ghost atoms within ghost cutoff
-  // only if neighbor list has changed since last check
-  // needs to be <= test b/c neighbor list could have been re-built in
-  //   same timestep as last post_integrate() call, but afterwards
-  // NOTE: no longer think is needed, due to error tests on atom->map()
-  // NOTE: if delete, can also delete lastcheck and check_ghosts()
-
-  //if (lastcheck <= neighbor->lastcall) check_ghosts();
 
   // acquire updated ghost atom positions
   // necessary b/c are calling this after integrate, but before Verlet comm
@@ -720,38 +710,6 @@ void FixBondCreate::post_integrate()
 
   // DEBUG
   //print_bb();
-}
-
-/* ----------------------------------------------------------------------
-   insure all atoms 2 hops away from owned atoms are in ghost list
-   this allows dihedral 1-2-3-4 to be properly created
-     and special list of 1 to be properly updated
-   if I own atom 1, but not 2,3,4, and bond 3-4 is added
-     then 2,3 will be ghosts and 3 will store 4 as its finalpartner
-------------------------------------------------------------------------- */
-
-void FixBondCreate::check_ghosts()
-{
-  int i,j,n;
-  tagint *slist;
-
-  int **nspecial = atom->nspecial;
-  tagint **special = atom->special;
-  int nlocal = atom->nlocal;
-
-  int flag = 0;
-  for (i = 0; i < nlocal; i++) {
-    slist = special[i];
-    n = nspecial[i][1];
-    for (j = 0; j < n; j++)
-      if (atom->map(slist[j]) < 0) flag = 1;
-  }
-
-  int flagall;
-  MPI_Allreduce(&flag,&flagall,1,MPI_INT,MPI_SUM,world);
-  if (flagall) 
-    error->all(FLERR,"Fix3 bond/create needs ghost atoms from further away");
-  lastcheck = update->ntimestep;
 }
 
 /* ----------------------------------------------------------------------

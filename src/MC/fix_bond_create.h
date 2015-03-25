@@ -58,7 +58,6 @@ class FixBondCreate : public Fix {
   int atype,dtype,itype;
   int angleflag,dihedralflag,improperflag;
   int overflow;
-  tagint lastcheck;
 
   int method;
   int *bondcount;
@@ -83,7 +82,6 @@ class FixBondCreate : public Fix {
   int nlevels_respa;
   int nangles,ndihedrals,nimpropers;
 
-  void check_ghosts();
   void update_topology();
   void rebuild_special(int);
   void create_angles(int);
