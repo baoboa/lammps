@@ -315,6 +315,8 @@ void FixBondCreate::setup(int vflag)
 
   // compute initial bondcount if this is first run
   // can't do this earlier, in constructor or init, b/c need ghost info
+  if (countflag) return;
+  countflag = 1;
 
   if (keep_bondcount) compute_bondcount();
 }
