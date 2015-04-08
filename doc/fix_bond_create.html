@@ -45,7 +45,13 @@
   <I>dtype</I> value = dihedraltype
     dihedraltype = type of created dihedrals
   <I>itype</I> value = impropertype
-    impropertype = type of created impropers 
+    impropertype = type of created impropers
+  <I>select</I> value = <I>nearest</I> or <I>random</I>
+    <I>nearest</I> = the nearest partners are chosen for the creation of a bond
+    <I>random</I> = a partner is chosen at random within the cutoff Rmin
+  <I>keep_bondcount</I> value = <I>yes</I> or <I>no</I>
+    <I>yes</I> = count the number of bonds per atom only once
+    <I>no</I> = recount the number of bonds at each iteration of the fix 
 </PRE>
 
 </UL>
@@ -82,17 +88,25 @@ requirement (explained below), then I,J is labeled as a "possible"
 bond pair.
 </P>
 <P>If several atoms are close to an atom, it may have multiple possible
-bond partners.  Every atom checks its list of possible bond partners
+bond partners.
+By default, the fix uses the <I>nearest</I> selection algorithm in which
+every atom checks its list of possible bond partners
 and labels the closest such partner as its "sole" bond partner.  After
 this is done, if atom I has atom J as its sole partner, and atom J has
 atom I as its sole partner, then the I,J bond is "eligible" to be
 formed.
+The alternative selection algorithm <I>random</I> collects the list of all
+possible partners and selects one randomly. This algorithm yields a
+different polymerization kinetics than <I>nearest</I> and can be described
+by rate equations. It is presented and compared to <I>nearest</I> in <A HREF = "#deBuyl">(de
+Buyl)</A>, with examples for chain- and step-growth.
 </P>
 <P>Note that these rules mean an atom will only be part of at most one
-created bond on a given timestep.  It also means that if atom I
-chooses atom J as its sole partner, but atom J chooses atom K is its
-sole partner (due to Rjk < Rij), then this means atom I will not form
-a bond on this timestep, even if it has other possible bond partners.
+created bond on a given timestep.  It also means, with the <I>nearest</I>
+algorithm, that if atom I chooses atom J as its sole partner, but atom
+J chooses atom K is its sole partner (due to Rjk < Rij), then this
+means atom I will not form a bond on this timestep, even if it has
+other possible bond partners.
 </P>
 <P>It is permissible to have <I>itype</I> = <I>jtype</I>.  <I>Rmin</I> must be <= the
 pairwise cutoff distance between <I>itype</I> and <I>jtype</I> atoms, as defined
@@ -117,6 +131,10 @@ atom type to change, simply specify <I>newtype</I> as <I>itype</I> or <I>jtype</
 actually created.  The <I>fraction</I> setting must be a value between 0.0
 and 1.0.  A uniform random number between 0.0 and 1.0 is generated and
 the eligible bond is only created if the random number < fraction.
+For the <I>nearest</I> selection algorithm, the random number is evaluated
+after the selection of possible partners. For the <I>random</I> selection
+algorithm, it is evaluated when the fix goes through the neighbor
+list.
 </P>
 <P>Any bond that is created is assigned a bond type of <I>bondtype</I>
 </P>
@@ -213,6 +231,17 @@ distance far from the equilibribum bond length, then the 2 atoms will
 oscillate dramatically when the bond is formed.  More generally, you
 may need to thermostat your system to compensate for energy changes
 resulting from created bonds (and angles, dihedrals, impropers).
+The protocol in <A HREF = "#deBuyl">(de Buyl)</A> uses a specific bond type to avoid
+discontinuities.
+</P>
+<P>IMPORTANT NOTE: If you need to define several times fix bond/create,
+for instance to define an initiator and a propagator reaction for
+polymerization, the bond count requires an update. This update will be
+performed at each iteration of the fix by setting <I>keep_bondcount</I> to
+<I>no</I>.
+</P>
+<P>IMPORTANT NOTE: The selection algorithm <I>random</I> requires that the
+<A HREF = "newton.html">newton</A> command be kept at the default value <I>on</I>.
 </P>
 <HR>
 
@@ -252,5 +281,14 @@ bond/swap</A>, <A HREF = "dump.html">dump local</A>,
 </P>
 <P>The option defaults are iparam = (0,itype), jparam = (0,jtype), and
 prob = 1.0.
+</P>
+<HR>
+
+<A NAME = "deBuyl"></A>
+
+<P><B>(de Buyl)</B> de Buyl and Nies, A parallel algorithm for step- and
+chain-growth polymerization in Molecular Dynamics,
+<A HREF = "http://dx.doi.org/10.1063/1.4916313">J. Chem. Phys. 142, 134102 (2015)</A>
+.
 </P>
 </HTML>
