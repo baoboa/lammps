@@ -19,8 +19,8 @@
    modification of 'post_integrate' and additional communication
    choices.
 
-   The selection method 'random' is presented in arXiv:1409.7498
-   (P. de Buyl and E. Nies, see full journal ref). Instead of choosing
+   The selection method 'random' is presented in de Buyl and Nies,
+   J. Chem. Phys. 142, 134102 (2015). Instead of choosing
    the closest partners, partners are chosen randomly (and with equal
    probability) among all partners in the given cutoff.
 
@@ -42,11 +42,24 @@
 #include "neigh_list.h"
 #include "neigh_request.h"
 #include "random_mars.h"
+#include "citeme.h"
 #include "memory.h"
 #include "error.h"
 
 using namespace LAMMPS_NS;
 using namespace FixConst;
+
+static const char cite_fix_bond_create_random[] =
+  "fix bond/create with random selection:\n\n"
+  "@Article{debuyl2015,\n"
+  " author = {P. de Buyl and E. Nies},\n"
+  " title = {A parallel algorithm for step- and chain-growth polymerization in Molecular Dynamics},\n"
+  " journal = {J.~Chem.~Phys.},\n"
+  " year =    2015,\n"
+  " volume =  142,\n"
+  " pages =   {134102},\n"
+  " doi =   {10.1063/1.4916313}\n"
+  "}\n\n";
 
 #define BIG 1.0e20
 #define DELTA 16
@@ -165,6 +178,9 @@ FixBondCreate::FixBondCreate(LAMMPS *lmp, int narg, char **arg) :
       iarg += 2;
     } else error->all(FLERR,"Illegal fix bond/create command");
   }
+
+  if (method == method_random && lmp->citeme)
+    lmp->citeme->add(cite_fix_bond_create_random);
 
   // error check
 
