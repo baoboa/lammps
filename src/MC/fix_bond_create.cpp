@@ -175,6 +175,9 @@ FixBondCreate::FixBondCreate(LAMMPS *lmp, int narg, char **arg) :
     error->all(FLERR,
                "Inconsistent iparam/jparam values in fix bond/create command");
 
+  if (method == method_random && !force->newton_bond)
+    error->all(FLERR,"Cannot use fix bond/create with newton_bond off");
+
   // initialize Marsaglia RNG with processor-unique seed
 
   random = new RanMars(lmp,seed + me);
