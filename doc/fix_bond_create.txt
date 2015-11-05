@@ -34,7 +34,13 @@ keyword = {iparam} or {jparam} or {prob} or {atype} or {dtype} or {itype} :l
   {dtype} value = dihedraltype
     dihedraltype = type of created dihedrals
   {itype} value = impropertype
-    impropertype = type of created impropers :pre
+    impropertype = type of created impropers
+  {select} value = {nearest} or {random}
+    {nearest} = the nearest partners are chosen for the creation of a bond
+    {random} = a partner is chosen at random within the cutoff Rmin
+  {keep_bondcount} value = {yes} or {no}
+    {yes} = count the number of bonds per atom only once
+    {no} = recount the number of bonds at each iteration of the fix :pre
 :ule
 
 [Examples:]
@@ -70,17 +76,25 @@ requirement (explained below), then I,J is labeled as a "possible"
 bond pair.
 
 If several atoms are close to an atom, it may have multiple possible
-bond partners.  Every atom checks its list of possible bond partners
+bond partners.
+By default, the fix uses the {nearest} selection algorithm in which
+every atom checks its list of possible bond partners
 and labels the closest such partner as its "sole" bond partner.  After
 this is done, if atom I has atom J as its sole partner, and atom J has
 atom I as its sole partner, then the I,J bond is "eligible" to be
 formed.
+The alternative selection algorithm {random} collects the list of all
+possible partners and selects one randomly. This algorithm yields a
+different polymerization kinetics than {nearest} and can be described
+by rate equations. It is presented and compared to {nearest} in "(de
+Buyl)"_#deBuyl, with examples for chain- and step-growth.
 
 Note that these rules mean an atom will only be part of at most one
-created bond on a given timestep.  It also means that if atom I
-chooses atom J as its sole partner, but atom J chooses atom K is its
-sole partner (due to Rjk < Rij), then this means atom I will not form
-a bond on this timestep, even if it has other possible bond partners.
+created bond on a given timestep.  It also means, with the {nearest}
+algorithm, that if atom I chooses atom J as its sole partner, but atom
+J chooses atom K is its sole partner (due to Rjk < Rij), then this
+means atom I will not form a bond on this timestep, even if it has
+other possible bond partners.
 
 It is permissible to have {itype} = {jtype}.  {Rmin} must be <= the
 pairwise cutoff distance between {itype} and {jtype} atoms, as defined
@@ -105,6 +119,10 @@ The {prob} keyword can also effect whether an eligible bond is
 actually created.  The {fraction} setting must be a value between 0.0
 and 1.0.  A uniform random number between 0.0 and 1.0 is generated and
 the eligible bond is only created if the random number < fraction.
+For the {nearest} selection algorithm, the random number is evaluated
+after the selection of possible partners. For the {random} selection
+algorithm, it is evaluated when the fix goes through the neighbor
+list.
 
 Any bond that is created is assigned a bond type of {bondtype}
 
@@ -201,6 +219,17 @@ distance far from the equilibribum bond length, then the 2 atoms will
 oscillate dramatically when the bond is formed.  More generally, you
 may need to thermostat your system to compensate for energy changes
 resulting from created bonds (and angles, dihedrals, impropers).
+The protocol in "(de Buyl)"_#deBuyl uses a specific bond type to avoid
+discontinuities.
+
+IMPORTANT NOTE: If you need to define several times fix bond/create,
+for instance to define an initiator and a propagator reaction for
+polymerization, the bond count requires an update. This update will be
+performed at each iteration of the fix by setting {keep_bondcount} to
+{no}.
+
+IMPORTANT NOTE: The selection algorithm {random} requires that the
+"newton"_newton.html command be kept at the default value {on}.
 
 :line
 
@@ -240,3 +269,11 @@ bond/swap"_fix_bond_swap.html, "dump local"_dump.html,
 
 The option defaults are iparam = (0,itype), jparam = (0,jtype), and
 prob = 1.0.
+
+:line
+
+:link(deBuyl)
+[(de Buyl)] de Buyl and Nies, A parallel algorithm for step- and
+chain-growth polymerization in Molecular Dynamics,
+"J. Chem. Phys. 142, 134102 (2015)"_http://dx.doi.org/10.1063/1.4916313
+.
